@@ -139,6 +139,24 @@ pvanalyze cpustacks trace.nettrace --group-by namespace --inclusive
 pvanalyze cpustacks trace.nettrace --from 1000 --to 2000 --top 10
 ```
 
+### `alloc <trace-file>`
+
+Analyze memory allocations by type:
+- Shows top allocating types with count, total bytes, and average size
+- Identifies Large Object Heap (LOH) allocations
+- Group by type, namespace, or module
+
+**Note:** Requires trace collected with allocation events:
+```bash
+dotnet-trace collect --providers "Microsoft-Windows-DotNETRuntime:0x200001:5" -- dotnet run
+```
+
+Options:
+- `--format text|json`
+- `--top <N>` - Number of types to show
+- `--group-by type|namespace|module` - Aggregation level
+- `--from <ms>` / `--to <ms>` - Time range filter
+
 ### `events <trace-file>`
 
 List and filter events:

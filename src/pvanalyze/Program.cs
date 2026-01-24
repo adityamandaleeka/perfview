@@ -15,6 +15,7 @@ class Program
             CpuStacksCommand.Create(),
             EventsCommand.Create(),
             ExceptionsCommand.Create(),
+            AllocCommand.Create(),
         };
 
         return await rootCommand.InvokeAsync(args);
