@@ -91,6 +91,20 @@ pvanalyze calltree trace.nettrace --depth 5
 pvanalyze calltree trace.nettrace --hot-path
 pvanalyze calltree trace.nettrace --caller-callee "WriteAsJsonAsync"
 pvanalyze calltree trace.nettrace --hot-path --format json
+
+# Point-in-time snapshot
+pvanalyze snapshot trace.nettrace --at 1500
+pvanalyze snapshot trace.nettrace --at 1500 --window 200
+pvanalyze snapshot trace.nettrace --at 1500 --format text
+
+# Unified timeline with bucketed event lanes
+pvanalyze timeline trace.nettrace
+pvanalyze timeline trace.nettrace --lanes gc,cpu --buckets 100
+pvanalyze timeline trace.nettrace --from 1000 --to 3000
+
+# Start an API server for tooling integration
+pvanalyze serve
+pvanalyze serve --port 8080
 ```
 
 ## Commands
@@ -226,6 +240,104 @@ pvanalyze calltree trace.nettrace --hot-path --format json
 # Analyze a specific time window
 pvanalyze calltree trace.nettrace --hot-path --from 1000 --to 2000
 ```
+
+### `snapshot <trace-file>`
+
+Show what was happening at a specific point in time. Provides a cross-cutting view of GC events, CPU samples, exceptions, and event activity within a time window around a given timestamp.
+
+Options:
+- `--at <ms>` (required) - Center timestamp in milliseconds
+- `--window <ms>` - Half-window size in ms (default: ±100ms)
+- `--format text|json` - Output format (default: json)
+
+Examples:
+```bash
+# What was happening at 1.5 seconds into the trace?
+pvanalyze snapshot trace.nettrace --at 1500
+
+# Wider window (±200ms)
+pvanalyze snapshot trace.nettrace --at 1500 --window 200
+
+# Human-readable output
+pvanalyze snapshot trace.nettrace --at 1500 --format text
+```
+
+### `timeline <trace-file>`
+
+Show a unified timeline with multiple event lanes bucketed over time. Useful for correlating different kinds of activity (GC pauses, CPU hotspots, exceptions) across the trace duration.
+
+Options:
+- `--lanes <list>` - Comma-separated lanes to include: gc, cpu, exceptions, alloc, jit, events (default: gc,cpu,exceptions)
+- `--buckets <N>` - Number of time buckets (default: 50)
+- `--from <ms>` / `--to <ms>` - Time range filter
+- `--format text|json` - Output format (default: json)
+
+Examples:
+```bash
+# Default timeline (gc, cpu, exceptions lanes)
+pvanalyze timeline trace.nettrace
+
+# Only GC and CPU lanes, higher resolution
+pvanalyze timeline trace.nettrace --lanes gc,cpu --buckets 100
+
+# All lanes for a specific time window
+pvanalyze timeline trace.nettrace --lanes gc,cpu,exceptions,alloc,jit --from 1000 --to 3000
+
+# Human-readable output
+pvanalyze timeline trace.nettrace --format text
+```
+
+### `serve`
+
+Start an HTTP server exposing trace analysis as REST API endpoints. Useful for building tooling, dashboards, or integrating with automation workflows.
+
+Options:
+- `--port <N>` - Port to listen on (default: 5001)
+- `--cors` - Enable CORS for browser-based clients (default: true)
+
+Examples:
+```bash
+# Start on default port
+pvanalyze serve
+
+# Start on a custom port
+pvanalyze serve --port 8080
+```
+
+#### API Endpoints
+
+Session management:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/traces/open` | Open a trace file (body: `{ "filePath": "..." }`) |
+| `GET` | `/api/traces` | List open trace sessions |
+| `GET` | `/api/traces/{id}/info` | Trace metadata |
+| `DELETE` | `/api/traces/{id}` | Close a trace session |
+
+Analysis (all scoped to a trace session):
+
+| Method | Endpoint | Query Parameters |
+|--------|----------|-----------------|
+| `GET` | `/api/traces/{id}/gcstats` | `timeline`, `longest`, `from`, `to`, `process` |
+| `GET` | `/api/traces/{id}/jitstats` | `process` |
+| `GET` | `/api/traces/{id}/cpustacks` | `top`, `groupBy`, `inclusive`, `from`, `to` |
+| `GET` | `/api/traces/{id}/events` | `type`, `provider`, `list`, `limit`, `from`, `to`, `pid`, `tid`, `payload` |
+| `GET` | `/api/traces/{id}/exceptions` | `type`, `from`, `to`, `limit` |
+| `GET` | `/api/traces/{id}/allocations` | `top`, `groupBy`, `from`, `to` |
+| `GET` | `/api/traces/{id}/calltree` | `depth` |
+| `GET` | `/api/traces/{id}/calltree/hotpath` | `path` |
+| `GET` | `/api/traces/{id}/calltree/children` | `path`, `depth` |
+| `GET` | `/api/traces/{id}/calltree/callercallee` | `method` |
+| `GET` | `/api/traces/{id}/timeline` | `from`, `to`, `buckets`, `lanes` |
+| `GET` | `/api/traces/{id}/snapshot` | `at`, `window` |
+
+WebSocket:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/ws` | WebSocket connection for streaming analysis |
 
 ## JSON Output for Agents
 
