@@ -56,9 +56,10 @@ public static class ExceptionsCommand
                 if (fromMs.HasValue && evt.TimeStampRelativeMSec < fromMs.Value) continue;
                 if (toMs.HasValue && evt.TimeStampRelativeMSec > toMs.Value) continue;
 
-                // Check if this is an exception event
-                if (evt.EventName.Contains("Exception", StringComparison.OrdinalIgnoreCase) ||
-                    evt.ProviderName.Contains("Exception", StringComparison.OrdinalIgnoreCase))
+                // Check if this is an exception event — only actual throws, not EH flow
+                if (evt.EventName == "Exception/Start" ||
+                    evt.EventName == "ExceptionThrown_V1" ||
+                    evt.EventName == "FirstChanceException")
                 {
                     var exType = GetExceptionType(evt);
                     var exMessage = GetExceptionMessage(evt);
@@ -139,19 +140,27 @@ public static class ExceptionsCommand
 
     private static string GetExceptionType(TraceEvent evt)
     {
-        // Try to extract exception type from payload
         var payloadNames = evt.PayloadNames;
+        // First: look for ExceptionType specifically
+        for (int i = 0; i < payloadNames.Length; i++)
+        {
+            if (string.Equals(payloadNames[i], "ExceptionType", StringComparison.OrdinalIgnoreCase))
+            {
+                var value = evt.PayloadValue(i)?.ToString();
+                if (!string.IsNullOrEmpty(value)) return value!;
+            }
+        }
+        // Fallback: any type/name payload
         for (int i = 0; i < payloadNames.Length; i++)
         {
             var name = payloadNames[i].ToLower();
-            if (name.Contains("type") || name.Contains("name") || name.Contains("exception"))
+            if (name.Contains("type") || name.Contains("name"))
             {
                 var value = evt.PayloadValue(i)?.ToString();
-                if (!string.IsNullOrEmpty(value) && value.Contains("Exception"))
-                    return value;
+                if (!string.IsNullOrEmpty(value)) return value!;
             }
         }
-        return evt.EventName;
+        return "Unknown";
     }
 
     private static string GetExceptionMessage(TraceEvent evt)

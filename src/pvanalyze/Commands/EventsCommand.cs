@@ -17,6 +17,9 @@ public static class EventsCommand
         var limitOption = new Option<int>("--limit", () => 100, "Maximum number of events to show");
         var fromOption = new Option<double?>("--from", "Start time in milliseconds");
         var toOption = new Option<double?>("--to", "End time in milliseconds");
+        var pidOption = new Option<int?>("--pid", "Filter by process ID");
+        var tidOption = new Option<int?>("--tid", "Filter by thread ID");
+        var payloadOption = new Option<string?>("--payload", "Filter by payload content (substring match)");
 
         var command = new Command("events", "List and filter events from a trace")
         {
@@ -27,15 +30,33 @@ public static class EventsCommand
             listOption,
             limitOption,
             fromOption,
-            toOption
+            toOption,
+            pidOption,
+            tidOption,
+            payloadOption
         };
 
-        command.SetHandler(Execute, traceFileArg, formatOption, typeOption, providerOption, listOption, limitOption, fromOption, toOption);
+        command.SetHandler(async (context) =>
+        {
+            var traceFile = context.ParseResult.GetValueForArgument(traceFileArg);
+            var format = context.ParseResult.GetValueForOption(formatOption);
+            var typeFilter = context.ParseResult.GetValueForOption(typeOption);
+            var providerFilter = context.ParseResult.GetValueForOption(providerOption);
+            var listOnly = context.ParseResult.GetValueForOption(listOption);
+            var limit = context.ParseResult.GetValueForOption(limitOption);
+            var fromMs = context.ParseResult.GetValueForOption(fromOption);
+            var toMs = context.ParseResult.GetValueForOption(toOption);
+            var pid = context.ParseResult.GetValueForOption(pidOption);
+            var tid = context.ParseResult.GetValueForOption(tidOption);
+            var payload = context.ParseResult.GetValueForOption(payloadOption);
+            Execute(traceFile, format, typeFilter, providerFilter, listOnly, limit, fromMs, toMs, pid, tid, payload);
+        });
         return command;
     }
 
     private static void Execute(FileInfo traceFile, OutputFormat format, string? typeFilter, 
-        string? providerFilter, bool listOnly, int limit, double? fromMs, double? toMs)
+        string? providerFilter, bool listOnly, int limit, double? fromMs, double? toMs,
+        int? pidFilter, int? tidFilter, string? payloadFilter)
     {
         if (!traceFile.Exists)
         {
@@ -55,7 +76,8 @@ public static class EventsCommand
             }
             else
             {
-                ListEvents(traceLog, format, typeFilter, providerFilter, limit, fromMs, toMs);
+                ListEvents(traceLog, format, typeFilter, providerFilter, limit, fromMs, toMs,
+                    pidFilter, tidFilter, payloadFilter);
             }
 
             // Clean up
@@ -118,7 +140,8 @@ public static class EventsCommand
     }
 
     private static void ListEvents(Etlx.TraceLog traceLog, OutputFormat format, 
-        string? typeFilter, string? providerFilter, int limit, double? fromMs, double? toMs)
+        string? typeFilter, string? providerFilter, int limit, double? fromMs, double? toMs,
+        int? pidFilter, int? tidFilter, string? payloadFilter)
     {
         var events = new List<EventInfo>();
         int count = 0;
@@ -139,6 +162,17 @@ public static class EventsCommand
                 !evt.ProviderName.Contains(providerFilter, StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            // PID/TID filtering
+            if (pidFilter.HasValue && evt.ProcessID != pidFilter.Value) continue;
+            if (tidFilter.HasValue && evt.ThreadID != tidFilter.Value) continue;
+
+            var message = GetEventMessage(evt);
+
+            // Payload filtering
+            if (payloadFilter != null &&
+                !message.Contains(payloadFilter, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             events.Add(new EventInfo
             {
                 TimestampMs = Math.Round(evt.TimeStampRelativeMSec, 3),
@@ -146,7 +180,7 @@ public static class EventsCommand
                 EventName = evt.EventName,
                 ProcessId = evt.ProcessID,
                 ThreadId = evt.ThreadID,
-                Message = GetEventMessage(evt)
+                Message = message
             });
 
             count++;

@@ -15,7 +15,11 @@ class Program
             CpuStacksCommand.Create(),
             EventsCommand.Create(),
             ExceptionsCommand.Create(),
+            CallTreeCommand.Create(),
             AllocCommand.Create(),
+            TimelineCommand.Create(),
+            SnapshotCommand.Create(),
+            ServeCommand.Create(),
         };
 
         return await rootCommand.InvokeAsync(args);

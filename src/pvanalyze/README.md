@@ -75,12 +75,22 @@ pvanalyze events trace.nettrace --list
 pvanalyze events trace.nettrace --type GCStart
 pvanalyze events trace.nettrace --provider DotNETRuntime --limit 50
 
+# Filter by PID, TID, or payload content
+pvanalyze events trace.nettrace --pid 1234
+pvanalyze events trace.nettrace --payload "ConnectionReset"
+
 # Time-filtered events
 pvanalyze events trace.nettrace --from 1000 --to 2000
 
 # Exception analysis
 pvanalyze exceptions trace.nettrace
 pvanalyze exceptions trace.nettrace --type NullReference
+
+# CPU call tree analysis
+pvanalyze calltree trace.nettrace --depth 5
+pvanalyze calltree trace.nettrace --hot-path
+pvanalyze calltree trace.nettrace --caller-callee "WriteAsJsonAsync"
+pvanalyze calltree trace.nettrace --hot-path --format json
 ```
 
 ## Commands
@@ -161,13 +171,16 @@ Options:
 
 List and filter events:
 - List unique event types (`--list`)
-- Filter by type or provider
+- Filter by type, provider, PID, TID, or payload content
 - Time range filtering
 
 Options:
 - `--list` - Show event type summary only
 - `--type <name>` - Filter by event type
 - `--provider <name>` - Filter by provider
+- `--pid <id>` - Filter by process ID
+- `--tid <id>` - Filter by thread ID
+- `--payload <text>` - Search event payload content
 - `--limit <N>` - Max events to show
 - `--from <ms>` / `--to <ms>` - Time range
 
@@ -181,6 +194,38 @@ Options:
 - `--type <name>` - Filter by exception type
 - `--from <ms>` / `--to <ms>` - Time range
 - `--limit <N>` - Max exceptions to show
+
+### `calltree <trace-file>`
+
+CPU call tree analysis with hot path detection:
+- Aggregated call tree with inclusive/exclusive metrics
+- Hot path follows the dominant call chain
+- Caller/callee view for any method (supports substring matching)
+
+Options:
+- `--depth <N>` - Max tree depth to display (default: 3)
+- `--hot-path` - Follow the dominant call chain (child ≥80% of parent)
+- `--caller-callee <method>` - Show callers and callees for a method
+- `--format text|json` - Output format
+- `--from <ms>` / `--to <ms>` - Time range filter
+
+Examples:
+```bash
+# Call tree to depth 5
+pvanalyze calltree trace.nettrace --depth 5
+
+# Hot path — find where CPU time actually goes
+pvanalyze calltree trace.nettrace --hot-path
+
+# Who calls a method and what does it call?
+pvanalyze calltree trace.nettrace --caller-callee "Serialize"
+
+# JSON output for agent consumption
+pvanalyze calltree trace.nettrace --hot-path --format json
+
+# Analyze a specific time window
+pvanalyze calltree trace.nettrace --hot-path --from 1000 --to 2000
+```
 
 ## JSON Output for Agents
 
