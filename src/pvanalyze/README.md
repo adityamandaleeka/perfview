@@ -37,6 +37,9 @@ dotnet-trace collect --process-id <PID> --output trace.nettrace
 
 # Or collect while running an app
 dotnet-trace collect -- dotnet run
+
+# Include assembly loader/binder events for loader diagnostics
+dotnet-trace collect --providers "Microsoft-Windows-DotNETRuntime:0xC" -- dotnet run
 ```
 
 ### Analyze with pvanalyze
@@ -85,6 +88,14 @@ pvanalyze events trace.nettrace --from 1000 --to 2000
 # Exception analysis
 pvanalyze exceptions trace.nettrace
 pvanalyze exceptions trace.nettrace --type NullReference
+
+# Assembly loader/binder diagnostics
+pvanalyze loader trace.nettrace                        # Summary + diagnostics (JSON default)
+pvanalyze loader trace.nettrace --failures             # Failed loads with full resolution trace
+pvanalyze loader trace.nettrace --slow --threshold 100 # Loads exceeding 100ms
+pvanalyze loader trace.nettrace --assembly "MyLib"     # Correlated timeline for one assembly
+pvanalyze loader trace.nettrace --probing              # Path probing hit/miss analysis
+pvanalyze loader trace.nettrace --format text           # Human-readable output
 
 # CPU call tree analysis
 pvanalyze calltree trace.nettrace --depth 5
@@ -208,6 +219,63 @@ Options:
 - `--type <name>` - Filter by exception type
 - `--from <ms>` / `--to <ms>` - Time range
 - `--limit <N>` - Max exceptions to show
+
+### `loader <trace-file>`
+
+Analyze assembly loader/binder events with pre-correlated diagnostics. Correlates `AssemblyLoadStart/Stop`, `ResolutionAttempted`, `KnownPathProbed`, and handler invocation events into per-assembly load records. Outputs JSON by default for agent consumption.
+
+**Note:** Requires trace collected with Binder events (keyword `0x4`):
+```bash
+# Binder events only
+dotnet-trace collect --providers "Microsoft-Windows-DotNETRuntime:4" -- dotnet run
+
+# Binder + Loader events
+dotnet-trace collect --providers "Microsoft-Windows-DotNETRuntime:0xC" -- dotnet run
+```
+
+Options:
+- `--format json|text` - Output format (default: json)
+- `--process <name>` - Filter by process name
+- `--failures` - Show only failed loads with full resolution trace
+- `--slow` - Show only slow loads
+- `--threshold <ms>` - Duration threshold for `--slow` (default: 50ms)
+- `--assembly <name>` - Correlated timeline for a specific assembly
+- `--context <name>` - Filter by AssemblyLoadContext name
+- `--probing` - Path probing analysis (hit rate, missed paths)
+- `--raw` - Include underlying raw event data
+- `--from <ms>` / `--to <ms>` - Time range filter
+
+Diagnostics (stable IDs for automation):
+
+| ID | Severity | Condition |
+|----|----------|-----------|
+| `LOADER001` | error | Assembly load failures |
+| `LOADER002` | warning | Probe miss rate > 50% |
+| `LOADER003` | info | Loads exceeding duration threshold |
+| `LOADER004` | info | Loads resolved via legacy AppDomain.AssemblyResolve |
+| `LOADER005` | info | Same assembly loaded into multiple ALCs |
+| `LOADER006` | warning | Version or name mismatches during resolution |
+
+Examples:
+```bash
+# Triage: summary + diagnostics
+pvanalyze loader trace.nettrace
+
+# Drill into failures
+pvanalyze loader trace.nettrace --failures
+
+# Why is this assembly failing to load?
+pvanalyze loader trace.nettrace --assembly "Contoso.Plugins.Auth"
+
+# What paths are being probed (and missed)?
+pvanalyze loader trace.nettrace --probing
+
+# Slow loads over 100ms
+pvanalyze loader trace.nettrace --slow --threshold 100
+
+# Human-readable text output
+pvanalyze loader trace.nettrace --failures --format text
+```
 
 ### `calltree <trace-file>`
 

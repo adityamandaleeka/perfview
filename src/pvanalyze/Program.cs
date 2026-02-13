@@ -19,6 +19,7 @@ class Program
             AllocCommand.Create(),
             TimelineCommand.Create(),
             SnapshotCommand.Create(),
+            LoaderCommand.Create(),
             ServeCommand.Create(),
         };
 
